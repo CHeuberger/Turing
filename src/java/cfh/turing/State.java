@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-public class State {
+public class State implements Positionable {
 
     final Position position;
     
@@ -23,19 +23,34 @@ public class State {
         alternatives.add(alternative);
     }
     
+    public Alternative alternativeFor(char symbol) throws NoSuchElementException {
+        return  alternatives
+            .stream()
+            .filter(a -> a.expected == symbol)
+            .findFirst()
+            .get();
+    }
+    
+    public int alternativesCount() {
+        return alternatives.size();
+    }
+    
+    public Alternative alternative(int index) {
+        if (index < 0 || index >= alternatives.size())
+            throw new NoSuchElementException("invalid alternative index: " + index);
+        return alternatives.get(index);
+    }
+    
+    @Override
+    public Position position() {
+        return position;
+    }
+    
     @Override
     public String toString() {
         return  alternatives
                 .stream()
                 .map(Alternative::toString)
-                .collect(joining("\n  ", "(\n  ", "\n )  ;; " + position));
-    }
-
-    public Alternative alternative(char symbol) throws NoSuchElementException {
-        return  alternatives
-                .stream()
-                .filter(a -> a.expected == symbol)
-                .findFirst()
-                .get();
+                .collect(joining("\n  ", "(\n  ", "\n )"));
     }
 }

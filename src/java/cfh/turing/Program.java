@@ -23,6 +23,10 @@ public class Program {
                 .collect(joining("\n ", "(\n ", "\n)"));
     }
 
+    public int stateCount() {
+        return states.size();
+    }
+    
     public State state(int index) throws NoSuchElementException {
         if (index < 0 || index >= states.size())
             throw new NoSuchElementException("invalid state index: " + index);

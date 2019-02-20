@@ -13,6 +13,9 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.CharBuffer;
@@ -22,7 +25,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 import java.util.prefs.Preferences;
 
 import javax.swing.AbstractAction;
@@ -62,6 +64,7 @@ public class Main {
     private Action loadAction;
     private Action saveAction;
     private Action parseAction;
+    private Action identAction;
     private Action startAction;
     private Action readAction;
     private Action writeAction;
@@ -104,18 +107,20 @@ public class Main {
         loadAction = newAction("Load", "load program from file (SHIFT to append)", this::doLoad);
         saveAction = newAction("Save", "save program to file (SHIFT to append)", this::doSave);
         parseAction = newAction("Parse", "parse the program", this::doParse);
+        identAction = newAction("Ident", "identify the origram parts", this::doIdent);
         startAction = newAction("Start", "start sprogram", this::doStart);
         readAction = newAction("Read", "read file into tape (SHIFT to append)", this::doRead);
         writeAction = newAction("Write", "write tape to file (SHIFT append)", this::doWrite);
         
         var controlPane = new JPanel();
         controlPane.setLayout(new GridBagLayout());
-        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0, LINE_START, NONE, new Insets(2, 4, 2, 2), 0, 0));
+        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 1.0, 0.0, LINE_START, NONE, new Insets(2, 4, 2, 2), 0, 0));
         controlPane.add(newJButton(saveAction),  new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, LINE_START, NONE, new Insets(2, 4, 2, 2), 0, 0));
-        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 1.0, 0.0, CENTER,     NONE, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(startAction), new GridBagConstraints(1, 1, 1, 1, 1.0, 0.0, CENTER,     NONE, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(readAction),  new GridBagConstraints(2, 0, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(writeAction), new GridBagConstraints(2, 1, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 0.0, 0.0, CENTER,     NONE, new Insets(2, 2, 2, 4), 0, 0));
+        controlPane.add(newJButton(identAction), new GridBagConstraints(1, 1, 1, 1, 0.0, 0.0, CENTER,     NONE, new Insets(2, 2, 2, 4), 0, 0));
+        controlPane.add(newJButton(startAction), new GridBagConstraints(2, 0, 1, 1, 0.0, 0.0, CENTER,     NONE, new Insets(2, 4, 2, 2), 0, 0));
+        controlPane.add(newJButton(readAction),  new GridBagConstraints(3, 0, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 4, 2, 4), 0, 0));
+        controlPane.add(newJButton(writeAction), new GridBagConstraints(3, 1, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 4), 0, 0));
         
         var main = newJPanel();
         main.setLayout(new GridBagLayout());
@@ -139,6 +144,7 @@ public class Main {
         loadAction.setEnabled(enabled);
         saveAction.setEnabled(enabled);
         parseAction.setEnabled(enabled);
+        identAction.setEnabled(enabled && program != null);
         startAction.setEnabled(enabled && program != null);
         readAction.setEnabled(enabled);
         writeAction.setEnabled(enabled);
@@ -218,9 +224,9 @@ public class Main {
         if (file.getName().indexOf('.') == -1) {
             file = new File(file.getParentFile(), file.getName() + ".turing");
         }
-        if (append && !file.exists() && showConfirmDialog(frame, new Object[] {file,  "file does not exist, create new?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+        if (append && !file.exists() && showConfirm(OK_CANCEL_OPTION, "Confirm", file,  "file does not exist, create new?") != OK_OPTION)
             return;
-        if (!append && file.exists() && showConfirmDialog(frame, new Object[] {file,  "file already exists, overwrite?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+        if (!append && file.exists() && showConfirm(OK_CANCEL_OPTION, "Confirm", file,  "file already exists, overwrite?") != OK_OPTION)
             return;
         
         var code = programPane.getText();
@@ -254,9 +260,9 @@ public class Main {
         if (file.getName().indexOf('.') == -1) {
             file = new File(file.getParentFile(), file.getName() + ".tape");
         }
-        if (append && !file.exists() && showConfirmDialog(frame, new Object[] {file,  "file does not exist, create new?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+        if (append && !file.exists() && showConfirm(OK_CANCEL_OPTION, "Confirm", file,  "file does not exist, create new?") != OK_OPTION)
             return;
-        if (!append && file.exists() && showConfirmDialog(frame, new Object[] {file,  "file already exists, overwrite?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+        if (!append && file.exists() && showConfirm(OK_CANCEL_OPTION, "Confirm", file,  "file already exists, overwrite?") != OK_OPTION)
             return;
         
         var tape = tapePane.getText();
@@ -289,6 +295,23 @@ public class Main {
         }
     }
     
+    private void doIdent(ActionEvent ev) {
+        if (program == null) {
+            showError("Error", "program not parsed");
+            return;
+        }
+        
+        var dialog = new IdentDialog(frame, program, programPane);
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                updateStatus(true);
+            }
+        });
+        updateStatus(false);
+        dialog.setVisible(true);
+    }
+    
     private void doStart(ActionEvent ev) {
         if (program == null) {
             showError("Error", "program not parsed");
@@ -314,7 +337,7 @@ public class Main {
                     var symbol = tape.charAt(position);
                     Alternative alternative;
                     try {
-                        alternative = state.alternative(symbol);
+                        alternative = state.alternativeFor(symbol);
                     } catch (NoSuchElementException ex) {
                         throw new StateException(state, 
                                 "no alternatives for '%s', position %d, state %d (%s)", symbol, position, stateIndex, ex);
@@ -560,11 +583,11 @@ public class Main {
         return pane;
     }
     
-    private Action newAction(String title, String tooltip, Consumer<ActionEvent> handle) {
+    private Action newAction(String title, String tooltip, ActionListener listener) {
         var action = new AbstractAction(title) {
             @Override
             public void actionPerformed(ActionEvent ev) {
-                handle.accept(ev);
+                listener.actionPerformed(ev);
             }
         };
         if (tooltip != null) {
@@ -582,6 +605,10 @@ public class Main {
     
     private void showError(String title, Object... message) {
         showMessageDialog(frame, message, title, ERROR_MESSAGE);
+    }
+    
+    private int showConfirm(int optionType, String title, Object... message) {
+        return showConfirmDialog(frame, message, title, optionType);
     }
     
     ////////////////////////////////////////////////////////////////////////////////////////////////

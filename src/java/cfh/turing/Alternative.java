@@ -2,7 +2,7 @@ package cfh.turing;
 
 import static java.util.Objects.*;
 
-public class Alternative {
+public class Alternative implements Positionable {
 
     final Position position;
     final char expected;
@@ -19,8 +19,13 @@ public class Alternative {
     }
     
     @Override
+    public Position position() {
+        return position;
+    }
+    
+    @Override
     public String toString() {
-        return String.format("(%s %s %s %d)  ;; %s", symbol(expected), symbol(replace), command, jump, position);
+        return String.format("(%s %s %s %d)", symbol(expected), symbol(replace), command, jump);
     }
     
     private char symbol(char symbol) {
