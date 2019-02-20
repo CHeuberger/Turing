@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public class State {
 
@@ -30,7 +31,7 @@ public class State {
                 .collect(joining("\n  ", "(\n  ", "\n )"));
     }
 
-    public Alternative alternative(char symbol) {
+    public Alternative alternative(char symbol) throws NoSuchElementException {
         return  alternatives
                 .stream()
                 .filter(a -> a.expected == symbol)

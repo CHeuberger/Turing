@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public class Program {
 
@@ -22,7 +23,13 @@ public class Program {
                 .collect(joining("\n ", "(\n ", "\n)"));
     }
 
-    public State state(int index) {
+    public State state(int index) throws NoSuchElementException {
+        if (index < 0 || index >= states.size())
+            throw new NoSuchElementException("invalid state index: " + index);
         return states.get(index);
+    }
+
+    public boolean isEmpty() {
+        return states.isEmpty();
     }
 }

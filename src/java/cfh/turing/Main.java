@@ -1,5 +1,6 @@
 package cfh.turing;
 
+import static java.util.Objects.*;
 import static java.nio.file.StandardOpenOption.*;
 import static java.awt.GridBagConstraints.*;
 import static javax.swing.JOptionPane.*;
@@ -35,6 +36,8 @@ import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.border.TitledBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class Main {
@@ -72,6 +75,20 @@ public class Main {
         programPane.setPreferredSize(new Dimension(200, -1));
         var code = preferences.get(PREF_CODE, "");
         programPane.setText(code);
+        programPane.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                resetProgram();
+            }
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                resetProgram();
+            }
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                resetProgram();
+            }
+        });
         
         var progrScroll = newJScrollPane("Program", programPane);
         
@@ -107,6 +124,16 @@ public class Main {
         frame.validate();
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+        
+        updateStatus();
+    }
+    
+    private void updateStatus() {
+        startAction.setEnabled(program != null);
+    }
+    private void resetProgram() {
+        program = null;
+        updateStatus();
     }
     
     private void doLoad(ActionEvent ev) {
@@ -128,7 +155,7 @@ public class Main {
                 code = programPane.getText() + code;
             }
             programPane.setText(code);
-            program = null;
+            resetProgram();
             frame.setTitle(file.getName());
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -179,7 +206,7 @@ public class Main {
             program = parse(text);
             text.rewind();
             preferences.put(PREF_CODE, text.toString());
-            System.out.println(program);  // TODO
+            updateStatus();
         } catch (ParseException ex) {
             System.err.printf("%s at position %d", ex.getClass().getSimpleName(), ex.getErrorOffset());
             showError(ex, "parsing program", "position: " + ex.getErrorOffset());
@@ -191,39 +218,52 @@ public class Main {
             showError("Error", "program not parsed");
             return;
         }
+        if (program.isEmpty()) {
+            showError("Error", "empty program");
+            return;
+        }
         var worker = new SwingWorker<String, Change>() {
-            private int position = 0;
-            private int stateIndex = 0;
             @Override
-            protected String doInBackground() throws Exception {
+            protected String doInBackground() throws RunException {
                 var tape = new StringBuilder(tapePane.getText());
                 if (tape.length() == 0 || tape.charAt(0) != '*')
-                    throw new Exception("tape must start with '*'");
+                    throw new RunException("tape must start with '*'");
                 preferences.put(PREF_TAPE, tape.toString());
+                
+                var position = 0;
+                var stateIndex = 0;
+                var state = program.state(stateIndex);
+                
                 while (!Thread.interrupted()) {
                     var symbol = tape.charAt(position);
-                    var state = program.state(stateIndex);
+                    Alternative alternative;
                     try {
-                        var alternative = state.alternative(symbol);
-                        tape.setCharAt(position, alternative.replace);
-                        publish(new Change(position, alternative));
-                        switch (alternative.command) {
-                            case HALT: 
-                                return tape.toString();
-                            case LEFT: 
-                                if (--position < 0) throw new Exception("moving left of start");
-                                break;
-                            case RIGHT:
-                                if (++position >= tape.length()) tape.append(' ');
-                                break;
-                            default:
-                                throw new IllegalArgumentException("unhandled command " + alternative.command);
-                        }
-                        stateIndex += alternative.jump;
+                        alternative = state.alternative(symbol);
                     } catch (NoSuchElementException ex) {
-                        throw new Exception(
-                                String.format("no alternatives for '%s', position %d, state %d", symbol, position, stateIndex),
-                                ex);
+                        throw new StateException(state, 
+                                "no alternatives for '%s', position %d, state %d (%s)", symbol, position, stateIndex, ex);
+                    }
+                    tape.setCharAt(position, alternative.replace);
+                    publish(new Change(position, alternative));
+                    switch (alternative.command) {
+                        case HALT: 
+                            return tape.toString();
+                        case LEFT: 
+                            if (--position < 0) throw new AlternativeException(alternative, "moving left of start");
+                            break;
+                        case RIGHT:
+                            if (++position >= tape.length()) tape.append(' ');
+                            break;
+                        default:
+                            throw new AlternativeException(alternative, "unhandled command \"%s\"", alternative.command);
+                    }
+                    int old = stateIndex;
+                    stateIndex += alternative.jump;
+                    try {
+                        state = program.state(stateIndex);
+                    } catch (NoSuchElementException ex) {
+                        throw new AlternativeException(alternative, 
+                            "no state at index '%d', position %d, from state %d (%S)", stateIndex, position, old, ex);
                     }
                 }
                 return tape.toString();
@@ -247,7 +287,6 @@ public class Main {
             }
         };
         worker.execute();
-        // TODO
     }
 
     private Program parse(CharBuffer text) throws ParseException {
@@ -302,7 +341,8 @@ public class Main {
     }
     
     private State parseState(CharBuffer text) throws ParseException {
-        var state = new State(new Position(text.position()));
+        Position position = new Position(text.position());
+        var state = new State(position);
         while (text.hasRemaining()) {
             var ch = text.get();
             switch (ch) {
@@ -314,7 +354,7 @@ public class Main {
                     skipComment(text);
                     break;
                 case ')':
-                    // TODO position
+                    position.end(text.position());
                     return state;
                 case '(':
                     var alternative = parseAlternative(text);
@@ -354,7 +394,7 @@ public class Main {
                         throw new ParseException("missing jump distance", text.position());
                     try {
                         var jump = Integer.parseInt(jumpText.toString());
-                        // TODO position
+                        position.end(text.position());
                         return new Alternative(position, expected, replace, command, jump);
                     } catch (NumberFormatException ex) {
                         throw (ParseException) new ParseException("invalid jump " + jumpText, text.position()).initCause(ex);
@@ -469,6 +509,28 @@ public class Main {
         Change(int position, Alternative alternative) {
             this.position = position;
             this.alternative = alternative;
+        }
+    }
+    
+    private static class RunException extends Exception {
+        protected RunException(String format, Object... args) {
+            super(String.format(format, args));
+        }
+    }
+    
+    private static class StateException extends RunException {
+        private final State state;
+        StateException(State state, String format, Object... args) {
+            super(format, args);
+            this.state = requireNonNull(state); 
+        }
+    }
+    
+    private static class AlternativeException extends RunException {
+        private final Alternative alternative;
+        AlternativeException(Alternative alternative, String format, Object... args) {
+            super(format, args);
+            this.alternative = requireNonNull(alternative); 
         }
     }
 }
