@@ -11,8 +11,12 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
+import java.io.File;
+import java.io.IOException;
 import java.nio.CharBuffer;
+import java.nio.file.Files;
 import java.text.ParseException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
@@ -22,6 +26,7 @@ import java.util.prefs.Preferences;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JButton;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -29,7 +34,7 @@ import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.border.TitledBorder;
-import javax.swing.text.DefaultStyledDocument;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class Main {
 
@@ -39,6 +44,7 @@ public class Main {
     
     private static final Font FONT = new Font("monospaced", Font.PLAIN, 12);
     
+    private static final String PREF_PROG_FILE = "program.file";
     private static final String PREF_CODE = "code";
     private static final String PREF_TAPE = "tape";
     private final Preferences preferences = Preferences.userNodeForPackage(getClass());
@@ -48,6 +54,8 @@ public class Main {
     private JTextPane programPane;
     private JTextPane tapePane;
     
+    private Action loadAction;
+    private Action saveAction;
     private Action parseAction;
     private Action startAction;
     
@@ -61,23 +69,28 @@ public class Main {
     private void initGUI() {
         programPane = newJTextPane();
         programPane.setPreferredSize(new Dimension(200, -1));
-        String code = preferences.get(PREF_CODE, "");
+        var code = preferences.get(PREF_CODE, "");
         programPane.setText(code);
         
         var progrScroll = newJScrollPane("Program", programPane);
         
         tapePane = newJTextPane();
-        String tape = preferences.get(PREF_TAPE, "");
+        var tape = preferences.get(PREF_TAPE, "");
         tapePane.setText(tape);
         
         var tapeScroll = newJScrollPane("Tape", tapePane);
         
+        loadAction = newAction("Load", "load program from file (SHIFT to append)", this::doLoad);
+        saveAction = newAction("Save", "save program to file", this::doSave);
         parseAction = newAction("Parse", "parse the program", this::doParse);
         startAction = newAction("Start", "start sprogram", this::doStart);
         
-        var controlPane = newJPanel();
-        controlPane.add(new JButton(parseAction));
-        controlPane.add(new JButton(startAction));
+        var controlPane = new JPanel();
+        controlPane.setLayout(new GridBagLayout());
+        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(saveAction),  new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(startAction), new GridBagConstraints(1, 1, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
         
         var main = newJPanel();
         main.setLayout(new GridBagLayout());
@@ -95,6 +108,34 @@ public class Main {
         frame.setVisible(true);
     }
     
+    private void doLoad(ActionEvent ev) {
+        var path = preferences.get(PREF_PROG_FILE, "default.turing");
+        var chooser = new JFileChooser();
+        chooser.addChoosableFileFilter(new FileNameExtensionFilter("Turing Program", "turing"));
+        chooser.setAcceptAllFileFilterUsed(true);
+        chooser.setFileSelectionMode(chooser.FILES_ONLY);
+        chooser.setMultiSelectionEnabled(false);
+        chooser.setSelectedFile(new File(path));
+        if (chooser.showOpenDialog(frame) != chooser.APPROVE_OPTION)
+            return;
+        
+        var file = chooser.getSelectedFile();
+        try {
+            var code = Files.readString(file.toPath());
+            preferences.put(PREF_PROG_FILE, file.getAbsolutePath());
+            if ((ev.getModifiers() & ev.SHIFT_MASK) != 0) {
+                code = programPane.getText() + code;
+            }
+            programPane.setText(code);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            showError(ex, "reading program");
+        }
+    }
+    
+    private void doSave(ActionEvent ev) {
+    }
+    
     private void doParse(ActionEvent ev) {
         var text = CharBuffer.wrap(programPane.getText());
         
@@ -104,15 +145,14 @@ public class Main {
             preferences.put(PREF_CODE, text.toString());
             System.out.println(program);  // TODO
         } catch (ParseException ex) {
-            System.err.println(ex.getErrorOffset());
-            ex.printStackTrace();
-            showMessageDialog(frame, ex.toString());
+            System.err.printf("%s at position %d", ex.getClass().getSimpleName(), ex.getErrorOffset());
+            showError(ex, "parsing program", "position: " + ex.getErrorOffset());
         }
     }
     
     private void doStart(ActionEvent ev) {
         if (program == null) {
-            showMessageDialog(frame, "program not parsed");
+            showError("no parsed program");
             return;
         }
         var worker = new SwingWorker<String, Change>() {
@@ -162,9 +202,11 @@ public class Main {
             protected void done() {
                 try {
                     tapePane.setText(get());
-                } catch (InterruptedException | ExecutionException ex) {
-                    ex.printStackTrace();
-                    showMessageDialog(frame, ex.toString());
+                } catch (InterruptedException ex) {
+                    showError(ex, "executing program");
+                } catch (ExecutionException ex) {
+                    var cause = ex.getCause();
+                    showError(cause==null ? ex : cause, "executing program");
                 }
             }
         };
@@ -175,7 +217,7 @@ public class Main {
     private Program parse(CharBuffer text) throws ParseException {
         Program program = null;
         while (text.hasRemaining()) {
-            char ch = text.get();
+            var ch = text.get();
             switch (ch) {
                 case ' ':
                 case '\n':
@@ -201,7 +243,7 @@ public class Main {
     private Program parseProgram(CharBuffer text) throws ParseException {
         var program = new Program();
         while (text.hasRemaining()) {
-            char ch = text.get();
+            var ch = text.get();
             switch (ch) {
                 case ' ':
                 case '\n':
@@ -226,7 +268,7 @@ public class Main {
     private State parseState(CharBuffer text) throws ParseException {
         var state = new State(new Position(text.position()));
         while (text.hasRemaining()) {
-            char ch = text.get();
+            var ch = text.get();
             switch (ch) {
                 case ' ':
                 case '\n':
@@ -254,9 +296,9 @@ public class Main {
         char expected = 0;
         char replace = 0;
         Command command = null;
-        StringBuilder jump = null;
+        StringBuilder jumpText = null;
         while (text.hasRemaining()) {
-            char ch = text.get();
+            var ch = text.get();
             switch (ch) {
                 case ' ':
                 case '\n':
@@ -272,16 +314,15 @@ public class Main {
                         throw new ParseException("missing replace symbol", text.position());
                     if (command == null)
                         throw new ParseException("missing command", text.position());
-                    if (jump == null)
+                    if (jumpText == null)
                         throw new ParseException("missing jump distance", text.position());
-                    int j;
                     try {
-                        j = Integer.parseInt(jump.toString());
+                        var jump = Integer.parseInt(jumpText.toString());
+                        // TODO position
+                        return new Alternative(position, expected, replace, command, jump);
                     } catch (NumberFormatException ex) {
-                        throw (ParseException) new ParseException("invalid jump " + jump, text.position()).initCause(ex);
+                        throw (ParseException) new ParseException("invalid jump " + jumpText, text.position()).initCause(ex);
                     }
-                    // TODO position
-                    return new Alternative(position, expected, replace, command, j);
                 default:
                     if (expected == 0) {
                         if (ch == 'B') {
@@ -310,17 +351,17 @@ public class Main {
                             throw (ParseException) new ParseException("invalid command '" + ch + "'", text.position()).initCause(ex);
                         }
                         break;
-                    } else if (jump == null) {
-                        jump = new StringBuilder();
+                    } else if (jumpText == null) {
+                        jumpText = new StringBuilder();
                         if (ch == '+')
                             break;
                         if (('0' <= ch && ch <= '9') || ch == '-') {
-                            jump.append(ch);
+                            jumpText.append(ch);
                             break;
                         }
                     } else {
                         if ('0' <= ch && ch <= '9') {
-                            jump.append(ch);
+                            jumpText.append(ch);
                             break;
                         }
                     }
@@ -339,6 +380,11 @@ public class Main {
     
     private JPanel newJPanel() {
         return new JPanel();
+    }
+    
+    private JButton newJButton(Action action) {
+        var button = new JButton(action);
+        return button;
     }
     
     private JScrollPane newJScrollPane(String title, Component view) {
@@ -364,6 +410,17 @@ public class Main {
             action.putValue(action.SHORT_DESCRIPTION, tooltip);
         }
         return action;
+    }
+    
+    private void showError(Throwable ex, Object... message) {
+        ex.printStackTrace();
+        var m = Arrays.copyOf(message, message.length+1);
+        m[message.length] = ex.getMessage();
+        showError(ex.getClass().getSimpleName(), m);
+    }
+    
+    private void showError(String title, Object... message) {
+        showMessageDialog(frame, message, title, ERROR_MESSAGE);
     }
     
     ////////////////////////////////////////////////////////////////////////////////////////////////
