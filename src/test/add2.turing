@@ -1,0 +1,272 @@
+;; ATTENTION: THIS PROGRAM NEEDS VERSION 0.2.0 OR HIGHER OF THE TURING
+;; MACHINE INTERPRETER!!
+
+;; returns the sum of two numbers given in binary where the first
+;; number must follow the initial star immediately followed by exactly
+;; one blank followed by the second number - does this in a much more
+;; efficient way than add.TURING
+
+;; the program moves back and forth across the two summands (and later
+;; maybe only across one summand if they don't have the same length)
+;; and adds the digits from right to left, i.e. from least significant
+;; to most significant, taking care of carrys - the result is
+;; temporarily stored one blank behind the second summand and at the
+;; end moved to the tape's start
+
+;; to make the program easier to read we use "labels" which are entry
+;; points for "jumps" - labels are the uppercase words at the
+;; beginning of some comments
+
+;; skip initial star
+(((* * R 1))
+ "2SUM0"
+ ;; at this point we're in front of two summands and have no
+ ;; carry from a previous addition
+ ((0 0 R 0)
+  (1 1 R 0)
+  (B B L 1))
+ ;; we walked past the first summand and we'll now remove its last
+ ;; digit and then branch depending on this last digit
+ ((0 B R "2FRONT0")
+  (1 B R "2FRONT1"))
+
+ "2FRONT0"
+ ;; we're now in front of the second summand and don't need to add
+ ;; anything, neither something from the first number nor a carry
+ ((B B R 0)
+  (0 0 R 1)
+  (1 1 R 1))
+ ((0 0 R 0)
+  (1 1 R 0)
+  (B B L 1))
+ ;; now we're at the last digit of the last summand which we just move
+ ;; one to the right (i.e. to the beginning of the result) - we have
+ ;; to branch depending on this digit
+ ((0 B R 1)
+  (1 B R "1ADD0"))
+
+ ;; add "0" to the front of the result, no carry to worry about
+ ((B 0 L "BACK0"))
+
+ "1ADD0"
+ ;; add "1" to the front of the result, no carry to worry about
+ ((B 1 L "BACK0"))
+
+ "BACK0"
+ ;; we have just updated the result and need to go back to the tape's
+ ;; start counting the remaning summands - at this point we know that
+ ;; we have no carry to remember
+
+ ;; if we reach the star without seeing any digit, we're done with
+ ;; arithmetic
+ ((B B L 0)
+  (* * R "DONE")
+  (1 1 L 1)
+  (0 0 L 1))
+ ;; otherwise there's at least one summand remaining - if we bounce
+ ;; into the star without seeing another space, it was the only one
+ ;; left
+ ((0 0 L 0)
+  (1 1 L 0)
+  (B B L 1)
+  (* * R "1SUM0"))
+ ;; now we're left of one summand but haven't seen a digit from a
+ ;; second summand
+ ((B B L 0)
+  (0 0 L 1)
+  (1 1 L 1)
+  (* * R "1SUM0"))
+ ;; at this point we're sure there are still two summands left and we
+ ;; just need to move to the tape's start
+ ((0 0 L 0)
+  (1 1 L 0)
+  (B B L 0)
+  (* * R "2SUM0"))
+
+ "2FRONT1"
+ ;; we're now in front of the second summand and need to add one
+ ;; (which can come either from the first summand or from a previous
+ ;; carry - makes no difference for us)
+ ((B B R 0)
+  (0 0 R 1)
+  (1 1 R 1))
+ ((0 0 R 0)
+  (1 1 R 0)
+  (B B L 1))
+ ;; now we're at the last digit of the last summand which we just move
+ ;; one to the right (i.e. to the beginning of the result) - we have
+ ;; to branch depending on this digit
+ ((0 B R "1ADD0")
+  (1 B R "0ADD1"))
+
+ "1ADD1"
+ ;; add "1" to the front of the result, remember carry
+ ((B 1 L "BACK1"))
+ "0ADD1"
+ ;; add "0" to the front of the result, remember carry
+ ((B 0 L "BACK1"))
+
+ "BACK1"
+ ;; we have just updated the result and need to go back to the tape's
+ ;; start counting the remaning summands - at this point we know that
+ ;; we have a carry to remember
+
+ ;; if we reach the star without seeing any digit, we're done with
+ ;; arithmetic
+ ((B B L 0)
+  (* * R "DONE1")
+  (1 1 L 1)
+  (0 0 L 1))
+ ;; otherwise there's at least one summand remaining - if we bounce
+ ;; into the star without seeing another space, it was the only one
+ ;; left
+ ((0 0 L 0)
+  (1 1 L 0)
+  (B B L 1)
+  (* * R "1SUM1"))
+ ;; now we're left of one summand but haven't seen a digit from a
+ ;; second summand
+ ((B B L 0)
+  (0 0 L 1)
+  (1 1 L 1)
+  (* * R "1SUM1"))
+ ;; at this point we're sure there are still two summands left and we
+ ;; just need to move to the tape's start
+ ((0 0 L 0)
+  (1 1 L 0)
+  (B B L 0)
+  (* * R "2SUM1"))
+
+ "2SUM1"
+ ;; at this point we're in front of two summands and have no carry
+ ;; from a previous addition
+ ((0 0 R 0)
+  (1 1 R 0)
+  (B B L 1))
+ ;; we walked past the first summand and we'll now remove its last
+ ;; digit and then branch depending on this last digit
+ ((0 B R "2FRONT1")
+  (1 B R "2FRONT2"))
+
+ "2FRONT2"
+ ;; we're now in front of the second number and need to add 2 to its
+ ;; least significant digit (1 from the first summand, 1 from a carry)
+ ((B B R 0)
+  (0 0 R 1)
+  (1 1 R 1))
+ ((0 0 R 0)
+  (1 1 R 0)
+  (B B L 1))
+ ;; now we're at the last digit of the last summand which we just move
+ ;; one to the right (i.e. to the beginning of the result) - we have
+ ;; to branch depending on this digit
+ ((0 B R "0ADD1")
+  (1 B R "1ADD1"))
+
+ "1SUM0"
+ ;; at this point we're in front of only one summand (the other one
+ ;; was shorter and has been removed) and have no carry from a
+ ;; previous addition
+ ((B B R 0)
+  (1 1 R 1)
+  (0 0 R 1))
+ ((1 1 R 0)
+  (0 0 R 0)
+  (B B L 1))
+ ;; we walked past the remaining summand and we'll now remove its last
+ ;; digit and then branch depending on this last digit
+ ((0 B R "COPY0")
+  (1 B R "COPY1"))
+
+ "COPY0"
+ ;; we're going add a zero to the front of the result, no carry
+ ;; to worry about
+ ((B B R 0)
+  (0 0 L 1)
+  (1 1 L 1))
+ ((B 0 L "BACK0"))
+
+ "COPY1"
+ ;; we're going add a one to the front of the result, no carry to
+ ;; worry about
+ ((B B R 0)
+  (0 0 L 1)
+  (1 1 L 1))
+ ((B 1 L "BACK0"))
+
+ "1SUM1"
+ ;; at this point we're in front of only one summand (the other one
+ ;; was shorter and has been removed) and there's a carry from a
+ ;; previous addition
+ ((B B R 0)
+  (1 1 R 1)
+  (0 0 R 1))
+ ((1 1 R 0)
+  (0 0 R 0)
+  (B B L 1))
+ ;; we walked past the remaining summand and we'll now remove its last
+ ;; digit and then branch depending on this last digit
+ ((0 B R "COPY1")
+  (1 B R "COPY0C"))
+
+ "COPY0C"
+ ;; we're going add a zero to the front of the result and we need to
+ ;; remember a carry
+ ((B B R 0)
+  (0 0 L 1)
+  (1 1 L 1))
+ ((B 0 L "BACK1"))
+ 
+ "DONE1"
+ ;; at this point we're almost done because we're at the tape's start
+ ;; with no summands left - but we have a carry left over that we need
+ ;; to add
+
+ ;; we first move to the result
+ ((B B R 0)
+  (1 1 L 1)
+  (0 0 L 1))
+ ;; now we add the carry bit
+ ((B 1 L 1)) 
+ ;; now back to tape start
+ ((B B L 0)
+  (* * R "DONE"))
+
+ "DONE"
+ ;; at this point we're finally done with arithmetic and at the tape's
+ ;; start, but there might still be blanks to take care of, i.e. we'll
+ ;; have to nudge the result to the left
+
+ ;; if the first symbol behind the star is a digit, we're finished
+ ((0 0 H 0)
+  (1 1 H 0)
+  (B B R 1))
+ ;; otherwise skip blanks
+ ((B B R 0)
+  (0 0 L 1)
+  (1 1 L 1))
+ ;; move to first digit
+ ((B B R 1))
+
+ "MOVEL"
+ ;; branch depending on this digit, skip if there's no digit left
+ ((0 B L "MOVE0")
+  (1 B L "MOVE1")
+  (B B L "END"))
+ ;; we must be at a blank now and we replace it with the digit from
+ ;; above
+ "MOVE0"
+ ((B 0 R "NEXT"))
+ "MOVE1"
+ ((B 1 R "NEXT"))
+ "NEXT"
+ ;; move one ahead and repeat this process
+ ((B B R "MOVEL"))
+ 
+ "END"
+ ;; move back to the tape's start to check whether we need to remove
+ ;; another blank
+ ((B B L 0)
+  (0 0 L 0)
+  (1 1 L 0)
+  (* * R "DONE")))

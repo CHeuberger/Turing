@@ -4,6 +4,7 @@ import static java.util.Objects.*;
 
 import java.nio.CharBuffer;
 import java.text.ParseException;
+import java.util.HashMap;
 import java.util.NoSuchElementException;
 
 public class Alternative implements Positionable {
@@ -39,14 +40,16 @@ public class Alternative implements Positionable {
                         throw new ParseException("missing command", text.position()-1);
                     if (jumpText == null)
                         throw new ParseException("missing jump distance", text.position()-1);
+                    var position = new Position(start);
+                    position.end(text.position());
+                    if (jumpText.charAt(0) == '"') 
+                        return new Alternative(position, expected, replace, command, jumpText.toString().substring(1));
                     int jump;
                     try {
                         jump = Integer.parseInt(jumpText.toString());
                     } catch (NumberFormatException ex) {
                         throw (ParseException) new ParseException("invalid jump " + jumpText, text.position()-1).initCause(ex);
                     }
-                    var position = new Position(start);
-                    position.end(text.position());
                     return new Alternative(position, expected, replace, command, jump);
                 default:
                     if (expected == 0) {
@@ -78,9 +81,19 @@ public class Alternative implements Positionable {
                         break;
                     } else if (jumpText == null) {
                         jumpText = new StringBuilder();
-                        if (ch == '+')
+                        if (ch == '"') {
+                            var startPosition = text.position();
+                            jumpText.append(ch);
+                            while (text.hasRemaining()) {
+                                var c = text.get();
+                                if (c == '"' )
+                                    break;
+                                if (c == '\n' || c == '\r')
+                                    throw new ParseException("label not terminated at end of line", startPosition);
+                                jumpText.append(c);
+                            }
                             break;
-                        if (('0' <= ch && ch <= '9') || ch == '-') {
+                        } else if (('0' <= ch && ch <= '9') || ch == '+' || ch == '-') {
                             jumpText.append(ch);
                             break;
                         }
@@ -90,7 +103,7 @@ public class Alternative implements Positionable {
                             break;
                         }
                     }
-                    throw new ParseException(String.format("reading alternative, unrecognized character '%s' (0x%2x)", ch, ch), text.position()-1);
+                    throw new ParseException(String.format("reading alternative, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position()-1);
             }
         }
         throw new ParseException("unexpected end of text reading alternative", text.position()-1);
@@ -100,7 +113,8 @@ public class Alternative implements Positionable {
     final char expected;
     final char replace;
     final Command command;
-    final int jump;
+    private int jump;
+    private String label;
     
     private Alternative(Position position, char expected, char replace, Command command, int jump) {
         this.position = requireNonNull(position);
@@ -108,6 +122,16 @@ public class Alternative implements Positionable {
         this.replace = replace;
         this.command = command;
         this.jump = jump;
+        label = null;
+    }
+    
+    private Alternative(Position position, char expected, char replace, Command command, String label) {
+        this.position = requireNonNull(position);
+        this.expected = expected;
+        this.replace = replace;
+        this.command = command;
+        jump = Integer.MIN_VALUE;
+        this.label = requireNonNull(label);
     }
     
     @Override
@@ -115,12 +139,30 @@ public class Alternative implements Positionable {
         return position;
     }
     
+    public int jump() {
+        if (jump == Integer.MIN_VALUE)
+            throw new IllegalStateException("label not resolved: \"" + label + "\"");
+        return jump;
+    }
+    
     @Override
     public String toString() {
-        return String.format("(%s %s %s %d)", symbol(expected), symbol(replace), command, jump);
+        return label == null 
+                ? String.format("(%s %s %s %d)", symbol(expected), symbol(replace), command, jump)
+                : String.format("(%s %s %s \"%s\"(%d))", symbol(expected), symbol(replace), command, label, jump);
     }
     
     private char symbol(char symbol) {
         return symbol == ' ' ? 'B' : symbol;
+    }
+
+    void resolve(int state, HashMap<String, Integer> labels) throws ParseException {
+        if (label != null) {
+            if (labels.containsKey(label)) {
+                jump = labels.get(label) - state;
+            } else {
+                throw new ParseException("unknown label \"" + label + "\"", position.end());
+            }
+        }
     }
 }

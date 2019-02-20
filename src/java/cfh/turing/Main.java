@@ -6,6 +6,7 @@ import static java.awt.GridBagConstraints.*;
 import static javax.swing.JOptionPane.*;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -42,6 +43,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
+
 public class Main {
 
     public static void main(String[] args) {
@@ -49,6 +51,8 @@ public class Main {
     }
     
     private static final Font FONT = new Font("monospaced", Font.PLAIN, 12);
+    private static final Color NORMAL_SELECT = Color.GRAY.brighter();
+    private static final Color ERROR_SELECT = Color.RED;
     
     private static final String PREF_PROG_FILE = "program.file";
     private static final String PREF_TAPE_FILE = "tape.file";
@@ -95,6 +99,8 @@ public class Main {
                 resetProgram();
             }
         });
+        programPane.addCaretListener(e -> programPane.setSelectionColor(NORMAL_SELECT));
+        programPane.setSelectionColor(NORMAL_SELECT);
         
         var progrScroll = newJScrollPane("Program", programPane);
         
@@ -152,6 +158,7 @@ public class Main {
     
     private void resetProgram() {
         program = null;
+        programPane.setSelectionColor(NORMAL_SELECT);
         updateStatus(true);
     }
     
@@ -294,6 +301,7 @@ public class Main {
             int offset = ex.getErrorOffset();
             System.err.printf("%s at position %d", ex.getClass().getSimpleName(), offset);
             programPane.select(offset, offset+1);
+            programPane.setSelectionColor(ERROR_SELECT);
             programPane.requestFocus();
             showError(ex, "parsing program", "position: " + offset);
         }
@@ -362,7 +370,7 @@ public class Main {
                             throw new AlternativeException(alternative, "unhandled command \"%s\"", alternative.command);
                     }
                     int old = stateIndex;
-                    stateIndex += alternative.jump;
+                    stateIndex += alternative.jump();
                     try {
                         state = program.state(stateIndex);
                     } catch (NoSuchElementException ex) {

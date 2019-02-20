@@ -6,6 +6,7 @@ import static java.util.stream.Collectors.*;
 import java.nio.CharBuffer;
 import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -17,6 +18,7 @@ public class Program implements Positionable {
         if (!text.hasRemaining() || text.get() != '(') 
             throw new ParseException("reading program, missing '('", start);
         
+        var labels = new HashMap<String, Integer>();
         var position = new Position(start);
         var program = new Program(position);
         while (text.hasRemaining()) {
@@ -33,6 +35,24 @@ public class Program implements Positionable {
                     }
                     text.reset();
                     break;
+                case '"':
+                    var startPosition = text.position();
+                    StringBuilder builder = new StringBuilder();
+                    while (text.hasRemaining()) {
+                        var c = text.get();
+                        if (c == '"') {
+                            var label = builder.toString();
+                            if (labels.containsKey(label))
+                                throw new ParseException("duplicated label \"" + label + "\"", startPosition);
+                            labels.put(label, program.stateCount());
+                            break;
+                        } else if (c == '\r' || c == '\n') {
+                            throw new ParseException("label not terminated at end of line", startPosition);
+                        } else {
+                            builder.append(c);
+                        }
+                    }
+                    break;
                 case '(':
                     text.reset();
                     var state = State.parse(text);
@@ -40,12 +60,23 @@ public class Program implements Positionable {
                     break;
                 case ')':
                     position.end(text.position());
-                    return program;
+                    return resolve(program, labels);
                 default:
                     throw new ParseException(String.format("reading program, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position()-1);
             }
         }
         throw new ParseException("unexpected end of text reading program", text.position()-1);
+    }
+
+    private static Program resolve(Program program, HashMap<String, Integer> labels) throws ParseException {
+        for (var i = 0; i < program.stateCount(); i++) {
+            var state = program.state(i);
+            for (var j = 0; j < state.alternativesCount(); j++) {
+                var alt = state.alternative(j);
+                alt.resolve(i, labels);
+            }
+        }
+        return program;
     }
 
     final Position position;
