@@ -36,7 +36,7 @@ public class IdentDialog extends JDialog {
         this.program = requireNonNull(program);
         this.textComponent = requireNonNull(textComponent);
         
-        state = 0;
+        state = -1;
         alternative = -1;
         
         elementField = new JTextArea(6, 20);
@@ -72,20 +72,24 @@ public class IdentDialog extends JDialog {
     
     private void update() {
         Positionable element;
-        var s = program.state(state);
-        if (alternative == -1) {
-            element = s;
+        if (state == -1) {
+            element = program;
+            elementBorder.setTitle("Program");
+        } else if (alternative == -1) {
+            element = program.state(state);
+            elementBorder.setTitle("State " + state);
         } else {
-            element = s.alternative(alternative);
+            element = program.state(state).alternative(alternative);
+            elementBorder.setTitle("State " + state + ", Alternative " + alternative);
         }
         elementField.setText(element.toString());
+        repaint();
         var pos = element.position();
         textComponent.select(pos.start(), pos.end());
     }
     
     private void doNext(ActionEvent ev) {
-        var s = program.state(state);
-        if (alternative < s.alternativesCount()-1) {
+        if (state > -1 && alternative < program.state(state).alternativesCount()-1) {
             alternative += 1;
         } else {
             if (state < program.stateCount()-1) {
@@ -97,15 +101,12 @@ public class IdentDialog extends JDialog {
     }
     
     private void doPrev(ActionEvent ev) {
-        var s = program.state(state);
-        if (alternative == -1) {
-            if (state > 0) {
-                state -= 1;
-                s = program.state(state);
-                alternative = s.alternativesCount() - 1;
-            }
-        } else {
+        if (state == -1) {
+        } else if (alternative > -1) {
             alternative -= 1;
+        } else {
+            state -= 1;
+            alternative = state == -1 ? -1 : program.state(state).alternativesCount()-1;
         }
         update();
     }

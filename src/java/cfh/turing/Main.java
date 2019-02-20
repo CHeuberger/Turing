@@ -168,12 +168,13 @@ public class Main {
         
         var file = chooser.getSelectedFile();
         try {
-            var code = Files.readString(file.toPath());
+            var code = new StringBuilder();
+            Files.lines(file.toPath()).forEach(line -> code.append(line).append('\n'));
             preferences.put(PREF_PROG_FILE, file.getAbsolutePath());
             if ((ev.getModifiers() & ev.SHIFT_MASK) != 0) {
-                code = programPane.getText() + code;
+                code.insert(0, programPane.getText());
             }
-            programPane.setText(code);
+            programPane.setText(code.toString());
             resetProgram();
             frame.setTitle(file.getName());
         } catch (IOException ex) {
@@ -310,6 +311,7 @@ public class Main {
         });
         updateStatus(false);
         dialog.setVisible(true);
+        programPane.requestFocus();
     }
     
     private void doStart(ActionEvent ev) {
@@ -400,166 +402,32 @@ public class Main {
     private Program parse(CharBuffer text) throws ParseException {
         Program program = null;
         while (text.hasRemaining()) {
+            text.mark();
             var ch = text.get();
             switch (ch) {
                 case ' ':
-                case '\n':
                 case '\r':
+                case '\n':
                     break;
                 case ';':
-                    skipComment(text);
+                    while (text.hasRemaining() && text.get() != '\n') {
+                        text.mark();
+                    }
+                    text.reset();
                     break;
                 case '(':
                     if (program != null)
                         throw new ParseException("program already defined", text.position());
-                    program = parseProgram(text);
+                    text.reset();
+                    program = Program.parse(text);
                     break;
                 default:
-                    throw new ParseException("expecting program, unrecognized character '" + ch + "'/" + (int)ch, text.position());
+                    throw new ParseException(String.format("expecting program, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position());
             }
         }
         if (program == null)
             throw new ParseException("end of text expecting program", text.position());
         return program;
-    }
-    
-    private Program parseProgram(CharBuffer text) throws ParseException {
-        var program = new Program();
-        while (text.hasRemaining()) {
-            var ch = text.get();
-            switch (ch) {
-                case ' ':
-                case '\n':
-                case '\r':
-                    break;
-                case ';':
-                    skipComment(text);
-                    break;
-                case ')':
-                    return program;
-                case '(':
-                    var state = parseState(text);
-                    program.add(state);
-                    break;
-                default:
-                    throw new ParseException("reading program, unrecognized character '" + ch + "'/" + (int)ch, text.position());
-            }
-        }
-        throw new ParseException("unexpected end of text reading program", text.position());
-    }
-    
-    private State parseState(CharBuffer text) throws ParseException {
-        Position position = new Position(text.position());
-        var state = new State(position);
-        while (text.hasRemaining()) {
-            var ch = text.get();
-            switch (ch) {
-                case ' ':
-                case '\n':
-                case '\r':
-                    break;
-                case ';':
-                    skipComment(text);
-                    break;
-                case ')':
-                    position.end(text.position());
-                    return state;
-                case '(':
-                    var alternative = parseAlternative(text);
-                    state.add(alternative);
-                    break;
-                default:
-                    throw new ParseException("reading state, unrecognized character '" + ch + "'/" + (int)ch, text.position());
-            }
-        }
-        throw new ParseException("unexpected end of text reading state", text.position());
-    }
-    
-    private Alternative parseAlternative(CharBuffer text) throws ParseException {
-        var position = new Position(text.position());
-        char expected = 0;
-        char replace = 0;
-        Command command = null;
-        StringBuilder jumpText = null;
-        while (text.hasRemaining()) {
-            var ch = text.get();
-            switch (ch) {
-                case ' ':
-                case '\n':
-                case '\r':
-                    break;
-                case ';':
-                    skipComment(text);
-                    break;
-                case ')':
-                    if (expected == 0)
-                        throw new ParseException("missing expected symbol", text.position());
-                    if (replace == 0)
-                        throw new ParseException("missing replace symbol", text.position());
-                    if (command == null)
-                        throw new ParseException("missing command", text.position());
-                    if (jumpText == null)
-                        throw new ParseException("missing jump distance", text.position());
-                    try {
-                        var jump = Integer.parseInt(jumpText.toString());
-                        position.end(text.position());
-                        return new Alternative(position, expected, replace, command, jump);
-                    } catch (NumberFormatException ex) {
-                        throw (ParseException) new ParseException("invalid jump " + jumpText, text.position()).initCause(ex);
-                    }
-                default:
-                    if (expected == 0) {
-                        if (ch == 'B') {
-                            expected = ' ';
-                            break;
-                        }
-                        if ("*01".indexOf(ch) != -1) {
-                            expected = ch;
-                            break;
-                        }
-                    } else if (replace == 0) {
-                        if (ch == 'B') {
-                            replace = ' ';
-                            break;
-                        }
-                        if ("*01".indexOf(ch) != -1) {
-                            replace = ch;
-                            if ((expected == '*') != (replace == '*'))
-                                throw new ParseException("invalid replace '" + replace + "'", text.position());
-                            break;
-                        }
-                    } else if (command == null) {
-                        try {
-                            command = Command.of(ch);
-                        } catch (NoSuchElementException ex) {
-                            throw (ParseException) new ParseException("invalid command '" + ch + "'", text.position()).initCause(ex);
-                        }
-                        break;
-                    } else if (jumpText == null) {
-                        jumpText = new StringBuilder();
-                        if (ch == '+')
-                            break;
-                        if (('0' <= ch && ch <= '9') || ch == '-') {
-                            jumpText.append(ch);
-                            break;
-                        }
-                    } else {
-                        if ('0' <= ch && ch <= '9') {
-                            jumpText.append(ch);
-                            break;
-                        }
-                    }
-                    throw new ParseException("reading alternative, unrecognized character '" + ch + "'/" + (int)ch, text.position());
-            }
-        }
-        throw new ParseException("unexpected end of text reading state", text.position());
-    }
-    
-    private void skipComment(CharBuffer text) {
-        while (text.hasRemaining() && text.get() != '\n') {
-            text.mark();
-        }
-        text.reset();
     }
     
     private JPanel newJPanel() {
