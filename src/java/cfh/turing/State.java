@@ -28,7 +28,7 @@ public class State {
         return  alternatives
                 .stream()
                 .map(Alternative::toString)
-                .collect(joining("\n  ", "(\n  ", "\n )"));
+                .collect(joining("\n  ", "(\n  ", "\n )  ;; " + position));
     }
 
     public Alternative alternative(char symbol) throws NoSuchElementException {

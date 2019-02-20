@@ -49,6 +49,7 @@ public class Main {
     private static final Font FONT = new Font("monospaced", Font.PLAIN, 12);
     
     private static final String PREF_PROG_FILE = "program.file";
+    private static final String PREF_TAPE_FILE = "tape.file";
     private static final String PREF_CODE = "code";
     private static final String PREF_TAPE = "tape";
     private final Preferences preferences = Preferences.userNodeForPackage(getClass());
@@ -62,6 +63,8 @@ public class Main {
     private Action saveAction;
     private Action parseAction;
     private Action startAction;
+    private Action readAction;
+    private Action writeAction;
     
     private Program program = null;
     
@@ -102,13 +105,17 @@ public class Main {
         saveAction = newAction("Save", "save program to file (SHIFT to append)", this::doSave);
         parseAction = newAction("Parse", "parse the program", this::doParse);
         startAction = newAction("Start", "start sprogram", this::doStart);
+        readAction = newAction("Read", "read file into tape (SHIFT to append)", this::doRead);
+        writeAction = newAction("Write", "write tape to file (SHIFT append)", this::doWrite);
         
         var controlPane = new JPanel();
         controlPane.setLayout(new GridBagLayout());
-        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0, CENTER, NONE, new Insets(2, 4, 2, 2), 0, 0));
-        controlPane.add(newJButton(saveAction),  new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, CENTER, NONE, new Insets(2, 4, 2, 2), 0, 0));
-        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 1.0, 0.0, CENTER, NONE, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(startAction), new GridBagConstraints(1, 1, 1, 1, 1.0, 0.0, CENTER, NONE, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0, LINE_START, NONE, new Insets(2, 4, 2, 2), 0, 0));
+        controlPane.add(newJButton(saveAction),  new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, LINE_START, NONE, new Insets(2, 4, 2, 2), 0, 0));
+        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 1.0, 0.0, CENTER,     NONE, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(startAction), new GridBagConstraints(1, 1, 1, 1, 1.0, 0.0, CENTER,     NONE, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(readAction),  new GridBagConstraints(2, 0, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(writeAction), new GridBagConstraints(2, 1, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 2), 0, 0));
         
         var main = newJPanel();
         main.setLayout(new GridBagLayout());
@@ -125,15 +132,21 @@ public class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
         
-        updateStatus();
+        updateStatus(true);
     }
     
-    private void updateStatus() {
-        startAction.setEnabled(program != null);
+    private void updateStatus(boolean enabled) {
+        loadAction.setEnabled(enabled);
+        saveAction.setEnabled(enabled);
+        parseAction.setEnabled(enabled);
+        startAction.setEnabled(enabled && program != null);
+        readAction.setEnabled(enabled);
+        writeAction.setEnabled(enabled);
     }
+    
     private void resetProgram() {
         program = null;
-        updateStatus();
+        updateStatus(true);
     }
     
     private void doLoad(ActionEvent ev) {
@@ -160,6 +173,32 @@ public class Main {
         } catch (IOException ex) {
             ex.printStackTrace();
             showError(ex, "loading program");
+        }
+    }
+    
+    private void doRead(ActionEvent ev) {
+        var path = preferences.get(PREF_TAPE_FILE, "default.tape");
+        var chooser = new JFileChooser();
+        chooser.addChoosableFileFilter(new FileNameExtensionFilter("Turing Tape", "tape"));
+        chooser.setAcceptAllFileFilterUsed(true);
+        chooser.setFileSelectionMode(chooser.FILES_ONLY);
+        chooser.setMultiSelectionEnabled(false);
+        chooser.setSelectedFile(new File(path));
+        if (chooser.showOpenDialog(frame) != chooser.APPROVE_OPTION)
+            return;
+        
+        var file = chooser.getSelectedFile();
+        try {
+            var tape = Files.readString(file.toPath());
+            preferences.put(PREF_TAPE_FILE, file.getAbsolutePath());
+            if ((ev.getModifiers() & ev.SHIFT_MASK) != 0) {
+                var start = tape.charAt(0)=='*' ? 1 : 0; 
+                tape = tapePane.getText() + tape.substring(start);
+            }
+            tapePane.setText(tape);
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            showError(ex, "loading tape");
         }
     }
     
@@ -199,6 +238,41 @@ public class Main {
         }
     }
     
+    private void doWrite(ActionEvent ev) {
+        var path = preferences.get(PREF_TAPE_FILE, "default.tape");
+        var chooser = new JFileChooser();
+        chooser.addChoosableFileFilter(new FileNameExtensionFilter("Turing Tape", "tape"));
+        chooser.setAcceptAllFileFilterUsed(true);
+        chooser.setFileSelectionMode(chooser.FILES_ONLY);
+        chooser.setMultiSelectionEnabled(false);
+        chooser.setSelectedFile(new File(path));
+        if (chooser.showSaveDialog(frame) != chooser.APPROVE_OPTION)
+            return;
+        
+        boolean append = (ev.getModifiers() & ev.SHIFT_MASK) != 0;
+        var file = chooser.getSelectedFile();
+        if (file.getName().indexOf('.') == -1) {
+            file = new File(file.getParentFile(), file.getName() + ".tape");
+        }
+        if (append && !file.exists() && showConfirmDialog(frame, new Object[] {file,  "file does not exist, create new?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+            return;
+        if (!append && file.exists() && showConfirmDialog(frame, new Object[] {file,  "file already exists, overwrite?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+            return;
+        
+        var tape = tapePane.getText();
+        try {
+            if (append) {
+                Files.writeString(file.toPath(), tape, WRITE, CREATE, APPEND);
+            } else {
+                Files.writeString(file.toPath(), tape, WRITE, CREATE, TRUNCATE_EXISTING);
+            }
+            preferences.put(PREF_TAPE_FILE, file.getAbsolutePath());
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            showError(ex, "saving program");
+        }
+    }
+    
     private void doParse(ActionEvent ev) {
         var text = CharBuffer.wrap(programPane.getText());
         
@@ -206,7 +280,9 @@ public class Main {
             program = parse(text);
             text.rewind();
             preferences.put(PREF_CODE, text.toString());
-            updateStatus();
+            updateStatus(true);
+            System.out.println();
+            System.out.println(program);
         } catch (ParseException ex) {
             System.err.printf("%s at position %d", ex.getClass().getSimpleName(), ex.getErrorOffset());
             showError(ex, "parsing program", "position: " + ex.getErrorOffset());
@@ -276,16 +352,25 @@ public class Main {
             }
             @Override
             protected void done() {
+                updateStatus(true);
                 try {
                     tapePane.setText(get());
                 } catch (InterruptedException ex) {
                     showError(ex, "executing program");
                 } catch (ExecutionException ex) {
                     var cause = ex.getCause();
+                    if (cause instanceof RunException) {
+                        var e = (RunException) cause;
+                        var position = e.position();
+                        if (position != null) {
+                            programPane.select(position.start(), position.end());
+                        }
+                    }
                     showError(cause==null ? ex : cause, "executing program");
                 }
             }
         };
+        updateStatus(false);
         worker.execute();
     }
 
@@ -516,21 +601,32 @@ public class Main {
         protected RunException(String format, Object... args) {
             super(String.format(format, args));
         }
+        Position position() {
+            return null;
+        }
     }
     
     private static class StateException extends RunException {
-        private final State state;
+        public final State state;
         StateException(State state, String format, Object... args) {
             super(format, args);
             this.state = requireNonNull(state); 
         }
+        @Override
+        Position position() {
+            return state.position;
+        }
     }
     
     private static class AlternativeException extends RunException {
-        private final Alternative alternative;
+        public final Alternative alternative;
         AlternativeException(Alternative alternative, String format, Object... args) {
             super(format, args);
             this.alternative = requireNonNull(alternative); 
+        }
+        @Override
+        Position position() {
+            return alternative.position;
         }
     }
 }

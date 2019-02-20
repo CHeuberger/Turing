@@ -20,7 +20,7 @@ public class Alternative {
     
     @Override
     public String toString() {
-        return String.format("(%s %s %s %d)", symbol(expected), symbol(replace), command, jump);
+        return String.format("(%s %s %s %d)  ;; %s", symbol(expected), symbol(replace), command, jump, position);
     }
     
     private char symbol(char symbol) {

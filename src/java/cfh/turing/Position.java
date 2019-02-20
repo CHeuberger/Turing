@@ -16,8 +16,12 @@ public class Position {
         this.end = end;
     }
     
+    public int start() { return start; }
+    
+    public int end() { return end; }
+    
     @Override
     public String toString() {
-        return start + "," + end;
+        return "<" + start + "," + end + ">";
     }
 }
