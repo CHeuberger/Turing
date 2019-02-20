@@ -1,5 +1,6 @@
 package cfh.turing;
 
+import static java.nio.file.StandardOpenOption.*;
 import static java.awt.GridBagConstraints.*;
 import static javax.swing.JOptionPane.*;
 
@@ -81,16 +82,16 @@ public class Main {
         var tapeScroll = newJScrollPane("Tape", tapePane);
         
         loadAction = newAction("Load", "load program from file (SHIFT to append)", this::doLoad);
-        saveAction = newAction("Save", "save program to file", this::doSave);
+        saveAction = newAction("Save", "save program to file (SHIFT to append)", this::doSave);
         parseAction = newAction("Parse", "parse the program", this::doParse);
         startAction = newAction("Start", "start sprogram", this::doStart);
         
         var controlPane = new JPanel();
         controlPane.setLayout(new GridBagLayout());
-        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(saveAction),  new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
-        controlPane.add(newJButton(startAction), new GridBagConstraints(1, 1, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(loadAction),  new GridBagConstraints(0, 0, 1, 1, 0.0, 0.0, CENTER, NONE, new Insets(2, 4, 2, 2), 0, 0));
+        controlPane.add(newJButton(saveAction),  new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, CENTER, NONE, new Insets(2, 4, 2, 2), 0, 0));
+        controlPane.add(newJButton(parseAction), new GridBagConstraints(1, 0, 1, 1, 1.0, 0.0, CENTER, NONE, new Insets(2, 2, 2, 2), 0, 0));
+        controlPane.add(newJButton(startAction), new GridBagConstraints(1, 1, 1, 1, 1.0, 0.0, CENTER, NONE, new Insets(2, 2, 2, 2), 0, 0));
         
         var main = newJPanel();
         main.setLayout(new GridBagLayout());
@@ -127,13 +128,48 @@ public class Main {
                 code = programPane.getText() + code;
             }
             programPane.setText(code);
+            program = null;
+            frame.setTitle(file.getName());
         } catch (IOException ex) {
             ex.printStackTrace();
-            showError(ex, "reading program");
+            showError(ex, "loading program");
         }
     }
     
     private void doSave(ActionEvent ev) {
+        var path = preferences.get(PREF_PROG_FILE, "default.turing");
+        var chooser = new JFileChooser();
+        chooser.addChoosableFileFilter(new FileNameExtensionFilter("Turing Program", "turing"));
+        chooser.setAcceptAllFileFilterUsed(true);
+        chooser.setFileSelectionMode(chooser.FILES_ONLY);
+        chooser.setMultiSelectionEnabled(false);
+        chooser.setSelectedFile(new File(path));
+        if (chooser.showSaveDialog(frame) != chooser.APPROVE_OPTION)
+            return;
+        
+        boolean append = (ev.getModifiers() & ev.SHIFT_MASK) != 0;
+        var file = chooser.getSelectedFile();
+        if (file.getName().indexOf('.') == -1) {
+            file = new File(file.getParentFile(), file.getName() + ".turing");
+        }
+        if (append && !file.exists() && showConfirmDialog(frame, new Object[] {file,  "file does not exist, create new?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+            return;
+        if (!append && file.exists() && showConfirmDialog(frame, new Object[] {file,  "file already exists, overwrite?"}, "Confirm", OK_CANCEL_OPTION) != OK_OPTION)
+            return;
+        
+        var code = programPane.getText();
+        try {
+            if (append) {
+                Files.writeString(file.toPath(), code, WRITE, CREATE, APPEND);
+            } else {
+                Files.writeString(file.toPath(), code, WRITE, CREATE, TRUNCATE_EXISTING);
+            }
+            preferences.put(PREF_PROG_FILE, file.getAbsolutePath());
+            frame.setTitle(file.getName());
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            showError(ex, "saving program");
+        }
     }
     
     private void doParse(ActionEvent ev) {
@@ -152,7 +188,7 @@ public class Main {
     
     private void doStart(ActionEvent ev) {
         if (program == null) {
-            showError("no parsed program");
+            showError("Error", "program not parsed");
             return;
         }
         var worker = new SwingWorker<String, Change>() {
