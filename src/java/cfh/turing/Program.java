@@ -42,10 +42,10 @@ public class Program implements Positionable {
                     position.end(text.position());
                     return program;
                 default:
-                    throw new ParseException(String.format("reading program, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position());
+                    throw new ParseException(String.format("reading program, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position()-1);
             }
         }
-        throw new ParseException("unexpected end of text reading program", text.position());
+        throw new ParseException("unexpected end of text reading program", text.position()-1);
     }
 
     final Position position;

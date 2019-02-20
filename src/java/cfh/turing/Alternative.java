@@ -32,18 +32,18 @@ public class Alternative implements Positionable {
                     break;
                 case ')':
                     if (expected == 0)
-                        throw new ParseException("missing expected symbol", text.position());
+                        throw new ParseException("missing expected symbol", text.position()-1);
                     if (replace == 0)
-                        throw new ParseException("missing replace symbol", text.position());
+                        throw new ParseException("missing replace symbol", text.position()-1);
                     if (command == null)
-                        throw new ParseException("missing command", text.position());
+                        throw new ParseException("missing command", text.position()-1);
                     if (jumpText == null)
-                        throw new ParseException("missing jump distance", text.position());
+                        throw new ParseException("missing jump distance", text.position()-1);
                     int jump;
                     try {
                         jump = Integer.parseInt(jumpText.toString());
                     } catch (NumberFormatException ex) {
-                        throw (ParseException) new ParseException("invalid jump " + jumpText, text.position()).initCause(ex);
+                        throw (ParseException) new ParseException("invalid jump " + jumpText, text.position()-1).initCause(ex);
                     }
                     var position = new Position(start);
                     position.end(text.position());
@@ -66,14 +66,14 @@ public class Alternative implements Positionable {
                         if ("*01".indexOf(ch) != -1) {
                             replace = ch;
                             if ((expected == '*') != (replace == '*'))
-                                throw new ParseException("invalid replace '" + replace + "'", text.position());
+                                throw new ParseException("invalid replace '" + replace + "'", text.position()-1);
                             break;
                         }
                     } else if (command == null) {
                         try {
                             command = Command.of(ch);
                         } catch (NoSuchElementException ex) {
-                            throw (ParseException) new ParseException("invalid command '" + ch + "'", text.position()).initCause(ex);
+                            throw (ParseException) new ParseException("invalid command '" + ch + "'", text.position()-1).initCause(ex);
                         }
                         break;
                     } else if (jumpText == null) {
@@ -90,10 +90,10 @@ public class Alternative implements Positionable {
                             break;
                         }
                     }
-                    throw new ParseException(String.format("reading alternative, unrecognized character '%s' (0x%2x)", ch, ch), text.position());
+                    throw new ParseException(String.format("reading alternative, unrecognized character '%s' (0x%2x)", ch, ch), text.position()-1);
             }
         }
-        throw new ParseException("unexpected end of text reading alternative", text.position());
+        throw new ParseException("unexpected end of text reading alternative", text.position()-1);
     }
 
     final Position position;

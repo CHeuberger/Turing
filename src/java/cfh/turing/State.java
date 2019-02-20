@@ -41,10 +41,10 @@ public class State implements Positionable {
                     position.end(text.position());
                     return state;
                 default:
-                    throw new ParseException(String.format("reading state, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position());
+                    throw new ParseException(String.format("reading state, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position()-1);
             }
         }
-        throw new ParseException("unexpected end of text reading state", text.position());
+        throw new ParseException("unexpected end of text reading state", text.position()-1);
     }
 
     final Position position;

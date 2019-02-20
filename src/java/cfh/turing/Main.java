@@ -196,7 +196,7 @@ public class Main {
         
         var file = chooser.getSelectedFile();
         try {
-            var tape = Files.readString(file.toPath());
+            var tape = Files.readString(file.toPath()).trim();
             preferences.put(PREF_TAPE_FILE, file.getAbsolutePath());
             if ((ev.getModifiers() & ev.SHIFT_MASK) != 0) {
                 var start = tape.charAt(0)=='*' ? 1 : 0; 
@@ -266,7 +266,7 @@ public class Main {
         if (!append && file.exists() && showConfirm(OK_CANCEL_OPTION, "Confirm", file,  "file already exists, overwrite?") != OK_OPTION)
             return;
         
-        var tape = tapePane.getText();
+        var tape = tapePane.getText().trim();
         try {
             if (append) {
                 Files.writeString(file.toPath(), tape, WRITE, CREATE, APPEND);
@@ -291,8 +291,11 @@ public class Main {
             System.out.println();
             System.out.println(program);
         } catch (ParseException ex) {
-            System.err.printf("%s at position %d", ex.getClass().getSimpleName(), ex.getErrorOffset());
-            showError(ex, "parsing program", "position: " + ex.getErrorOffset());
+            int offset = ex.getErrorOffset();
+            System.err.printf("%s at position %d", ex.getClass().getSimpleName(), offset);
+            programPane.select(offset, offset+1);
+            programPane.requestFocus();
+            showError(ex, "parsing program", "position: " + offset);
         }
     }
     
@@ -400,7 +403,7 @@ public class Main {
     }
 
     private Program parse(CharBuffer text) throws ParseException {
-        Program program = null;
+        Program prog = null;
         while (text.hasRemaining()) {
             text.mark();
             var ch = text.get();
@@ -416,18 +419,18 @@ public class Main {
                     text.reset();
                     break;
                 case '(':
-                    if (program != null)
-                        throw new ParseException("program already defined", text.position());
+                    if (prog != null)
+                        throw new ParseException("program already defined", text.position()-1);
                     text.reset();
-                    program = Program.parse(text);
+                    prog = Program.parse(text);
                     break;
                 default:
-                    throw new ParseException(String.format("expecting program, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position());
+                    throw new ParseException(String.format("expecting program, unrecognized character '%s' (0x%2x)", ch, (int)ch), text.position()-1);
             }
         }
-        if (program == null)
-            throw new ParseException("end of text expecting program", text.position());
-        return program;
+        if (prog == null)
+            throw new ParseException("end of text expecting program", text.position()-1);
+        return prog;
     }
     
     private JPanel newJPanel() {
