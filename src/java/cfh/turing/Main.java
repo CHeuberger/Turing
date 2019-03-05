@@ -35,6 +35,8 @@ import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
@@ -64,6 +66,7 @@ public class Main {
     private JFrame frame;
     private JTextPane programPane;
     private JTextPane tapePane;
+    private JTextField output;
     
     private Action loadAction;
     private Action saveAction;
@@ -82,7 +85,6 @@ public class Main {
     
     private void initGUI() {
         programPane = newJTextPane();
-        programPane.setPreferredSize(new Dimension(200, -1));
         var code = preferences.get(PREF_CODE, "");
         programPane.setText(code);
         programPane.getDocument().addDocumentListener(new DocumentListener() {
@@ -102,13 +104,19 @@ public class Main {
         programPane.addCaretListener(e -> programPane.setSelectionColor(NORMAL_SELECT));
         programPane.setSelectionColor(NORMAL_SELECT);
         
-        var progrScroll = newJScrollPane("Program", programPane);
+        var noWrap = new JPanel(new BorderLayout());
+        noWrap.add(programPane);
+        var progScroll = newJScrollPane("Program", noWrap);
+        progScroll.setPreferredSize(new Dimension(250, -1));
         
         tapePane = newJTextPane();
         var tape = preferences.get(PREF_TAPE, "");
-        tapePane.setText(tape);
         
         var tapeScroll = newJScrollPane("Tape", tapePane);
+        
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+        split.setLeftComponent(progScroll);
+        split.setRightComponent(tapeScroll);
         
         loadAction = newAction("Load", "load program from file (SHIFT to append)", this::doLoad);
         saveAction = newAction("Save", "save program to file (SHIFT to append)", this::doSave);
@@ -128,11 +136,65 @@ public class Main {
         controlPane.add(newJButton(readAction),  new GridBagConstraints(3, 0, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 4, 2, 4), 0, 0));
         controlPane.add(newJButton(writeAction), new GridBagConstraints(3, 1, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 4), 0, 0));
         
+        output = newJTextField();
+        output.setEditable(false);
+        
+        tapePane.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                update();
+            }
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                update();
+            }
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                update();
+            }
+            private void update() {
+                String text = tapePane.getText();
+                StringBuilder builder = new StringBuilder();
+                for (var i = 0; i < text.length(); i++) {
+                    var ch = text.charAt(i);
+                    switch (ch) {
+                        case '*':
+                            builder.append(ch);
+                            break;
+                        case ' ':
+                            builder.append(ch);
+                            while (i+1 < text.length()) {
+                                if (text.charAt(i+1) != ' ')
+                                    break;
+                                i += 1;
+                            }
+                            break;
+                        case '0':
+                        case '1':
+                            var j = i + 1;
+                            for (; j < text.length(); j++) {
+                                ch = text.charAt(j);
+                                if (ch != '0' && ch != '1')
+                                    break;
+                            }
+                            int val = Integer.parseInt(text.substring(i, j), 2);
+                            builder.append(val);
+                            i = j - 1;
+                            break;
+                        default:
+                            break;    
+                    }
+                }
+                output.setText(builder.toString());
+            }
+        });
+        tapePane.setText(tape);
+
         var main = newJPanel();
         main.setLayout(new GridBagLayout());
-        main.add(progrScroll, new GridBagConstraints(0, 0, 1, 1, 0.0, 1.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
-        main.add(tapeScroll,  new GridBagConstraints(1, 0, 1, 1, 1.0, 1.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
-        main.add(controlPane, new GridBagConstraints(0, 1, 2, 1, 0.0, 0.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
+        main.add(split,       new GridBagConstraints(0, 0, 1, 1, 1.0, 1.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
+        main.add(controlPane, new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
+        main.add(output,      new GridBagConstraints(0, 2, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
         
         frame = new JFrame();
         frame.setDefaultCloseOperation(frame.DISPOSE_ON_CLOSE);
@@ -456,6 +518,12 @@ public class Main {
         return scroll;
     }
 
+    private JTextField newJTextField() {
+        var field = new JTextField();
+        field.setFont(FONT);
+        return field;
+    }
+    
     private JTextPane newJTextPane() {
         var pane = new JTextPane();
         pane.setFont(FONT);
