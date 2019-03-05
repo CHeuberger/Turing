@@ -1,11 +1,13 @@
 package cfh.turing;
 
 import java.util.Arrays;
+import java.util.NoSuchElementException;
 
 public enum Command {
 
     LEFT('L'),
     RIGHT('R'),
+    NOP('N'),
     HALT('H');
     
     private final char code;
@@ -19,7 +21,7 @@ public enum Command {
         return Character.toString(code);
     }
     
-    public static Command of(char code) {
-        return Arrays.stream(values()).filter(c -> c.code == code).findFirst().get();
+    public static Command of(char code) throws NoSuchElementException {
+        return Arrays.stream(values()).filter(c -> c.code == code).findFirst().orElseThrow(() -> new NoSuchElementException("command '" + code + "'"));
     }
 }

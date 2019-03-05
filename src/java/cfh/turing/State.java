@@ -35,7 +35,13 @@ public class State implements Positionable {
                 case '(':
                     text.reset();
                     var alternative = Alternative.parse(text);
-                    state.add(alternative);
+                    try {
+                        state.add(alternative);
+                    } catch (IllegalArgumentException ex) {
+                        throw (ParseException) new ParseException(String.format("reading state, %s", 
+                            ex.getMessage()), text.position()-1)
+                        .initCause(ex);
+                    }
                     break;
                 case ')':
                     position.end(text.position());
@@ -57,12 +63,13 @@ public class State implements Positionable {
     
     private void add(Alternative alternative) {
         if (alternatives.stream().anyMatch(a -> a.expected == alternative.expected))
-            throw new IllegalArgumentException("alternative duplicated for " + alternative.expected);
+            throw new IllegalArgumentException(String.format("duplicate alternative for '%s' (0x%2x)", 
+                alternative.expected, (int)alternative.expected));
         alternatives.add(alternative);
     }
     
     public Alternative alternativeFor(char symbol) throws NoSuchElementException {
-        return  alternatives
+        return alternatives
             .stream()
             .filter(a -> a.expected == symbol)
             .findFirst()

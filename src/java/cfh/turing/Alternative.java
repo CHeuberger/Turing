@@ -145,13 +145,6 @@ public class Alternative implements Positionable {
         return jump;
     }
     
-    @Override
-    public String toString() {
-        return label == null 
-                ? String.format("(%s %s %s %d)", symbol(expected), symbol(replace), command, jump)
-                : String.format("(%s %s %s \"%s\"(%d))", symbol(expected), symbol(replace), command, label, jump);
-    }
-    
     private char symbol(char symbol) {
         return symbol == ' ' ? 'B' : symbol;
     }
@@ -164,5 +157,12 @@ public class Alternative implements Positionable {
                 throw new ParseException("unknown label \"" + label + "\"", position.end());
             }
         }
+    }
+    
+    @Override
+    public String toString() {
+        return label == null 
+            ? String.format("(%s %s %s %d)", symbol(expected), symbol(replace), command, jump)
+                : String.format("(%s %s %s \"%s\"(%d))", symbol(expected), symbol(replace), command, label, jump);
     }
 }

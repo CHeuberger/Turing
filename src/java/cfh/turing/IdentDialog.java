@@ -48,13 +48,13 @@ public class IdentDialog extends JDialog {
         var scroll = new JScrollPane(elementField);
         scroll.setBorder(elementBorder);
         
-        var next = newJButton("Mext", "show next element", this::doNext);
         var prev = newJButton("Prev", "show previous element", this::doPrev);
+        var next = newJButton("Mext", "show next element", this::doNext);
         
         var buttons = Box.createHorizontalBox();
         buttons.add(Box.createHorizontalGlue());
-        buttons.add(next);
         buttons.add(prev);
+        buttons.add(next);
         buttons.add(Box.createHorizontalGlue());
         
         var panel = new JPanel();

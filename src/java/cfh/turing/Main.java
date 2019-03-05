@@ -30,9 +30,12 @@ import java.util.prefs.Preferences;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -41,9 +44,12 @@ import javax.swing.JTextPane;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.border.TitledBorder;
+import javax.swing.event.CaretEvent;
+import javax.swing.event.CaretListener;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.Element;
 
 
 public class Main {
@@ -67,6 +73,10 @@ public class Main {
     private JTextPane programPane;
     private JTextPane tapePane;
     private JTextField output;
+    
+    private JTextField line;
+    private JTextField column;
+    private JTextField dot;
     
     private Action loadAction;
     private Action saveAction;
@@ -136,7 +146,7 @@ public class Main {
         controlPane.add(newJButton(readAction),  new GridBagConstraints(3, 0, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 4, 2, 4), 0, 0));
         controlPane.add(newJButton(writeAction), new GridBagConstraints(3, 1, 1, 1, 1.0, 0.0, LINE_END,   NONE, new Insets(2, 2, 2, 4), 0, 0));
         
-        output = newJTextField();
+        output = newJTextField(0);
         output.setEditable(false);
         
         tapePane.getDocument().addDocumentListener(new DocumentListener() {
@@ -189,12 +199,41 @@ public class Main {
             }
         });
         tapePane.setText(tape);
-
+        
+        line = newStatusField(6, "line");
+        column = newStatusField(4, "column");
+        dot = newStatusField(11, "caret position");
+        
+        programPane.addCaretListener(new CaretListener() {
+            @Override
+            public void caretUpdate(CaretEvent e) {
+                Element root = programPane.getDocument().getDefaultRootElement();
+                int index = root.getElementIndex(e.getDot());
+                line.setText(Integer.toString(index+1));
+                column.setText(Integer.toString(e.getDot()-root.getElement(index).getStartOffset()));
+                if (e.getMark() < e.getDot()) {
+                    dot.setText(e.getMark() + "-" + e.getDot());
+                } else if (e.getMark() > e.getDot()) {
+                        dot.setText(e.getDot() + "-" + e.getMark());
+                } else {
+                    dot.setText(Integer.toString(e.getDot()));
+                }
+            }
+        });
+        
+        var status = Box.createHorizontalBox();
+        status.add(line);
+        status.add(column);
+        status.add(dot);
+        status.add(Box.createHorizontalGlue());
+        
         var main = newJPanel();
         main.setLayout(new GridBagLayout());
-        main.add(split,       new GridBagConstraints(0, 0, 1, 1, 1.0, 1.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
-        main.add(controlPane, new GridBagConstraints(0, 1, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
-        main.add(output,      new GridBagConstraints(0, 2, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(0, 0, 0, 0), 0, 0));
+        main.add(split,       new GridBagConstraints(0, 0, 2, 1, 1.0, 1.0, CENTER, BOTH, new Insets(4, 4, 2, 4), 0, 0));
+        main.add(controlPane, new GridBagConstraints(0, 1, 2, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 4, 2, 4), 0, 0));
+        main.add(newJLabel("Output:"), new GridBagConstraints(0, 2, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 4, 2, 2), 0, 0));
+        main.add(output,               new GridBagConstraints(1, 2, 1, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 2, 2, 4), 0, 0));
+        main.add(status, new GridBagConstraints(0, 3, 2, 1, 0.0, 0.0, CENTER, BOTH, new Insets(2, 4, 4, 4), 0, 0));
         
         frame = new JFrame();
         frame.setDefaultCloseOperation(frame.DISPOSE_ON_CLOSE);
@@ -205,10 +244,10 @@ public class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
         
-        updateStatus(true);
+        updateActions(true);
     }
     
-    private void updateStatus(boolean enabled) {
+    private void updateActions(boolean enabled) {
         loadAction.setEnabled(enabled);
         saveAction.setEnabled(enabled);
         parseAction.setEnabled(enabled);
@@ -221,7 +260,7 @@ public class Main {
     private void resetProgram() {
         program = null;
         programPane.setSelectionColor(NORMAL_SELECT);
-        updateStatus(true);
+        updateActions(true);
     }
     
     private void doLoad(ActionEvent ev) {
@@ -356,7 +395,7 @@ public class Main {
             program = parse(text);
             text.rewind();
             preferences.put(PREF_CODE, text.toString());
-            updateStatus(true);
+            updateActions(true);
             System.out.println();
             System.out.println(program);
         } catch (ParseException ex) {
@@ -379,10 +418,10 @@ public class Main {
         dialog.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                updateStatus(true);
+                updateActions(true);
             }
         });
-        updateStatus(false);
+        updateActions(false);
         dialog.setVisible(true);
         programPane.requestFocus();
     }
@@ -422,6 +461,8 @@ public class Main {
                     switch (alternative.command) {
                         case HALT: 
                             return tape.toString();
+                        case NOP:
+                            break;
                         case LEFT: 
                             if (--position < 0) throw new AlternativeException(alternative, "moving left of start");
                             break;
@@ -450,7 +491,7 @@ public class Main {
             }
             @Override
             protected void done() {
-                updateStatus(true);
+                updateActions(true);
                 try {
                     tapePane.setText(get());
                 } catch (InterruptedException ex) {
@@ -468,7 +509,7 @@ public class Main {
                 }
             }
         };
-        updateStatus(false);
+        updateActions(false);
         worker.execute();
     }
 
@@ -507,6 +548,11 @@ public class Main {
         return new JPanel();
     }
     
+    private JLabel newJLabel(String text) {
+        var label = new JLabel(text);
+        return label;
+    }
+    
     private JButton newJButton(Action action) {
         var button = new JButton(action);
         return button;
@@ -518,9 +564,20 @@ public class Main {
         return scroll;
     }
 
-    private JTextField newJTextField() {
-        var field = new JTextField();
+    private JTextField newJTextField(int columns) {
+        var field = new JTextField(columns);
         field.setFont(FONT);
+        return field;
+    }
+    
+    private JTextField newStatusField(int columns, String tooltip) {
+        var field = new JTextField(columns);
+        field.setBorder(BorderFactory.createEtchedBorder());
+        field.setEditable(false);
+        field.setFont(FONT);
+        field.setHorizontalAlignment(dot.TRAILING);
+        field.setMaximumSize(field.getPreferredSize());
+        field.setToolTipText(tooltip);
         return field;
     }
     

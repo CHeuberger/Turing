@@ -43,7 +43,7 @@ public class Program implements Positionable {
                         if (c == '"') {
                             var label = builder.toString();
                             if (labels.containsKey(label))
-                                throw new ParseException("duplicated label \"" + label + "\"", startPosition);
+                                throw new ParseException("duplicate label \"" + label + "\"", startPosition);
                             labels.put(label, program.stateCount());
                             break;
                         } else if (c == '\r' || c == '\n') {
